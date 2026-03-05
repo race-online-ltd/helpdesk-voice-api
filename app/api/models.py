@@ -80,26 +80,8 @@ class TicketPublic(TicketBase):
     updated_at: datetime
 
 
-# class Department(SQLModel, table=True):
-#     id: int = Field(default=None, primary_key=True)
-#     department_name: str = Field(default=None, max_length=255)
-#     created_at: datetime = Field(default_factory=datetime.utcnow)
-#     updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# class Team(SQLModel, table=True):
-#     id: int = Field(default=None, primary_key=True)
-#     team_name: str = Field(default=None, max_length=255)
-#     group_email: EmailStr = Field(default=None, max_length=255)
-#     additional_email: EmailStr | None = Field(default=None, max_length=255)
-#     department_id: int = Field(foreign_key="department.id", index=True)
-#     division_id: 
-#     created_at: datetime = Field(default_factory=datetime.utcnow)
-#     updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
 class Category(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     category_in_english: str = Field(default=None, max_length=255)
     category_in_bangla: str = Field(default=None, max_length=255)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -107,7 +89,7 @@ class Category(SQLModel, table=True):
 
 
 class SubCategory(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
     subcategory_in_english: str = Field(default=None, max_length=255)
     subcategory_in_bangla: str = Field(default=None, max_length=255)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -115,9 +97,9 @@ class SubCategory(SQLModel, table=True):
 
 
 class SubCategoryTeam(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    category_id: int = Field(foreign_key="category.id", index=True)
-    sub_category_id: int = Field(foreign_key="subcategory.id", index=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    category_id: int = Field(default=None, index=True)
+    sub_category_id: int = Field(default=None, index=True)
     team_id: int = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

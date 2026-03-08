@@ -29,6 +29,17 @@ class TicketClassification(BaseModel):
     description: str
 
 
+@router.get("/", response_model=list[TicketPublic], status_code=status.HTTP_200_OK)
+async def get_tickets(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+):
+    """Get all tickets for the current user."""
+    result = await session.exec(select(Ticket).where(Ticket.user_id == current_user.id))
+    tickets = result.all()
+    return tickets
+
+
 @router.post("/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
 async def create_ticket(
     current_user: Annotated[User, Depends(get_current_active_user)],

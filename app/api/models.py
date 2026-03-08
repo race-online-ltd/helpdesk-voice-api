@@ -59,7 +59,6 @@ class TokenBlacklist(SQLModel, table=True):
 class TicketBase(SQLModel):
     category: str = Field(default=None, max_length=100)
     subcategory: str = Field(default=None, max_length=100)
-    assigned_team: str = Field(default=None, max_length=100)
     priority: str = Field(default="Low", max_length=50)
     status: str = Field(default="Open", max_length=50)
     ref_ticket_id: Optional[uuid.UUID] = Field(default=None, index=True)

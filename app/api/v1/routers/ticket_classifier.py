@@ -135,7 +135,6 @@ Respond ONLY with a valid JSON object using exactly these fields:
     ticket = Ticket(
         category=classification.category,
         subcategory=classification.subcategory,
-        assigned_team=classification.assigned_team,
         priority=classification.priority,
         description=classification.description,
         status="Open",

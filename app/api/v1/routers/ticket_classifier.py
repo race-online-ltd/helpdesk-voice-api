@@ -25,7 +25,6 @@ router = APIRouter(
 class TicketClassification(BaseModel):
     category: str
     subcategory: str
-    assigned_team: str
     priority: str
     description: str
 
@@ -102,7 +101,6 @@ Respond ONLY with a valid JSON object using exactly these fields:
 {{
   "category": "<one of the categories above>",
   "subcategory": "<one of the subcategories for that category>",
-  "assigned_team": "<the responsible team>",
   "priority": "<Low | Medium | High | Critical>",
   "description": "<2-3 sentence summary of the complaint in English>"
 }}"""

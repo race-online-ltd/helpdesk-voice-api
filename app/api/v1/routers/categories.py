@@ -49,6 +49,57 @@ async def get_subcategories_for_category(
     return subcategories
 
 
+@router.get("/{category_id}", response_model=Category, status_code=status.HTTP_200_OK)
+async def get_category(
+    category_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get a single category by ID."""
+    result = await session.exec(select(Category).where(Category.id == category_id))
+    category = result.first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    return category
+
+
+@router.put("/{category_id}", response_model=Category, status_code=status.HTTP_200_OK)
+async def update_category(
+    category_id: int,
+    category_data: Category,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Update a category by ID."""
+    result = await session.exec(select(Category).where(Category.id == category_id))
+    category = result.first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    category.category_in_english = category_data.category_in_english
+    category.category_in_bangla = category_data.category_in_bangla
+    from datetime import datetime
+    category.updated_at = datetime.utcnow()
+    session.add(category)
+    await session.commit()
+    await session.refresh(category)
+    return category
+
+
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Delete a category by ID."""
+    result = await session.exec(select(Category).where(Category.id == category_id))
+    category = result.first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    await session.delete(category)
+    await session.commit()
+
+
 @router.post("/{category_id}/subcategories/{subcategory_id}", status_code=status.HTTP_201_CREATED)
 async def add_subcategory_to_category(
     category_id: int,

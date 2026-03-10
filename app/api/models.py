@@ -88,6 +88,7 @@ class Category(SQLModel, table=True):
 
 
 class CategoryCreate(SQLModel):
+    id: int = Field(default=None)
     category_in_english: str = Field(max_length=255)
     category_in_bangla: str = Field(max_length=255)
 
@@ -106,6 +107,7 @@ class SubCategory(SQLModel, table=True):
 
 
 class SubCategoryCreate(SQLModel):
+    id: int = Field(default=None)
     subcategory_in_english: str = Field(max_length=255)
     subcategory_in_bangla: str = Field(max_length=255)
 

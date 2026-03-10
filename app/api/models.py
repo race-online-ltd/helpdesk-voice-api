@@ -99,6 +99,6 @@ class SubCategoryTeam(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     category_id: int = Field(default=None, index=True)
     sub_category_id: int = Field(default=None, index=True)
-    team_id: int = Field(default=None)
+    team_id: int = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

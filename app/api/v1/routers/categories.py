@@ -29,21 +29,48 @@ async def create_category(category: Category, session: Annotated[AsyncSession, D
     await session.refresh(category)
     return category
 
-@router.get("/subcategories", status_code=status.HTTP_200_OK)
-async def get_teams_for_category(session: Annotated[AsyncSession, Depends(get_session)]):
-    """Get subcategories grouped by category."""
-    result = await session.exec(
-        select(Category.category_in_english, SubCategory.subcategory_in_english)
-        .join(SubCategoryTeam, SubCategoryTeam.category_id == Category.id)
-        .join(SubCategory, SubCategoryTeam.sub_category_id == SubCategory.id)
-        .distinct()
-    )
-    rows = result.all()
+@router.get("/{category_id}/subcategories", status_code=status.HTTP_200_OK)
+async def get_subcategories_for_category(
+    category_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)]
+):
+    """Get subcategories for a category."""
+    result = await session.exec(select(SubCategoryTeam).where(SubCategoryTeam.category_id == category_id))
+    
+    subcategory_teams = result.all()
+    subcategories = {}
+    
+    for subcategory_team in subcategory_teams:
+        subcategory_result = await session.exec(select(SubCategory).where(SubCategory.id == subcategory_team.sub_category_id))
+        subcategory = subcategory_result.first()
+        if subcategory:
+            subcategories[subcategory.id] = subcategory
 
-    grouped: dict[str, list[str]] = {}
-    for category_name, subcategory_name in rows:
-        grouped.setdefault(category_name, [])
-        if subcategory_name not in grouped[category_name]:
-            grouped[category_name].append(subcategory_name)
+    return subcategories
 
-    return grouped
+
+@router.post("/{category_id}/subcategories/{subcategory_id}", status_code=status.HTTP_201_CREATED)
+async def add_subcategory_to_category(
+    category_id: int,
+    subcategory_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Add a subcategory to a category."""
+    # Check if the category exists
+    category_result = await session.exec(select(Category).where(Category.id == category_id))
+    category = category_result.first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    # Check if the subcategory exists
+    subcategory_result = await session.exec(select(SubCategory).where(SubCategory.id == subcategory_id))
+    subcategory = subcategory_result.first()
+    if not subcategory:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subcategory not found")
+
+    # Create the association
+    association = SubCategoryTeam(category_id=category_id, sub_category_id=subcategory_id)
+    session.add(association)
+    await session.commit()
+    return {"message": "Subcategory added to category successfully"}

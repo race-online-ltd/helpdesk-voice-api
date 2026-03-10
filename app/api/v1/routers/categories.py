@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.api.models import User, Category, SubCategory, SubCategoryTeam
+from app.api.models import User, Category, CategoryCreate, CategoryUpdate, SubCategory, SubCategoryTeam
 from app.api.db import get_session
 from typing import Annotated
 from app.api.v1.deps import get_current_active_user
@@ -23,8 +23,9 @@ async def get_categories(
     return categories
 
 @router.post("/", response_model=Category, status_code=status.HTTP_201_CREATED)
-async def create_category(category: Category, session: Annotated[AsyncSession, Depends(get_session)], current_user: Annotated[User, Depends(get_current_active_user)]):
+async def create_category(category_data: CategoryCreate, session: Annotated[AsyncSession, Depends(get_session)], current_user: Annotated[User, Depends(get_current_active_user)]):
     """Create a new category."""
+    category = Category(**category_data.model_dump())
     session.add(category)
     await session.commit()
     await session.refresh(category)
@@ -67,7 +68,7 @@ async def get_category(
 @router.put("/{category_id}", response_model=Category, status_code=status.HTTP_200_OK)
 async def update_category(
     category_id: int,
-    category_data: Category,
+    category_data: CategoryUpdate,
     session: Annotated[AsyncSession, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_active_user)],
 ):

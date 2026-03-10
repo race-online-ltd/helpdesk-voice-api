@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, DateTime, Column, func
 from pydantic import EmailStr
 import uuid
 from datetime import datetime, timezone
@@ -68,8 +68,8 @@ class TicketBase(SQLModel):
 class Ticket(TicketBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
 
 
 class TicketPublic(TicketBase):
@@ -83,16 +83,36 @@ class Category(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     category_in_english: str = Field(default=None, max_length=255)
     category_in_bangla: str = Field(default=None, max_length=255)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+
+
+class CategoryCreate(SQLModel):
+    category_in_english: str = Field(max_length=255)
+    category_in_bangla: str = Field(max_length=255)
+
+
+class CategoryUpdate(SQLModel):
+    category_in_english: str = Field(max_length=255)
+    category_in_bangla: str = Field(max_length=255)
 
 
 class SubCategory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subcategory_in_english: str = Field(default=None, max_length=255)
     subcategory_in_bangla: str = Field(default=None, max_length=255)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+
+
+class SubCategoryCreate(SQLModel):
+    subcategory_in_english: str = Field(max_length=255)
+    subcategory_in_bangla: str = Field(max_length=255)
+
+
+class SubCategoryUpdate(SQLModel):
+    subcategory_in_english: str = Field(max_length=255)
+    subcategory_in_bangla: str = Field(max_length=255)
 
 
 class SubCategoryTeam(SQLModel, table=True):
@@ -100,5 +120,5 @@ class SubCategoryTeam(SQLModel, table=True):
     category_id: int = Field(default=None, index=True)
     sub_category_id: int = Field(default=None, index=True)
     team_id: int = Field(default=None, nullable=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
+    updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

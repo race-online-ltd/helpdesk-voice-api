@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, DateTime, Column, func
+from sqlmodel import SQLModel, Field, DateTime, Column, func, Integer, ForeignKey
 from pydantic import EmailStr
 import uuid
 from datetime import datetime, timezone
@@ -119,8 +119,14 @@ class SubCategoryUpdate(SQLModel):
 
 class SubCategoryTeam(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    category_id: int = Field(default=None, index=True)
-    sub_category_id: int = Field(default=None, index=True)
+    category_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("category.id", ondelete="CASCADE"), index=True, nullable=False)
+    )
+    sub_category_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("subcategory.id", ondelete="CASCADE"), index=True, nullable=False)
+    )
     team_id: int = Field(default=None, nullable=True)
     created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

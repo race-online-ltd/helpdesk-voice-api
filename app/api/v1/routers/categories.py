@@ -5,6 +5,7 @@ from app.api.models import User, Category, SubCategory, SubCategoryTeam
 from app.api.db import get_session
 from typing import Annotated
 from app.api.v1.deps import get_current_active_user
+from datetime import datetime, timezone
 
 router = APIRouter(
     prefix="/categories",
@@ -77,8 +78,7 @@ async def update_category(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     category.category_in_english = category_data.category_in_english
     category.category_in_bangla = category_data.category_in_bangla
-    from datetime import datetime
-    category.updated_at = datetime.utcnow()
+    category.updated_at = datetime.now(timezone.utc)
     session.add(category)
     await session.commit()
     await session.refresh(category)

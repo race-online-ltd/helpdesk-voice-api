@@ -5,6 +5,7 @@ from app.api.models import User, Category, SubCategory, SubCategoryTeam
 from app.api.db import get_session
 from typing import Annotated
 from app.api.v1.deps import get_current_active_user
+from datetime import datetime, timezone
 
 router = APIRouter(
     prefix="/subcategories",
@@ -58,8 +59,7 @@ async def update_subcategory(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subcategory not found")
     subcategory.subcategory_in_english = subcategory_data.subcategory_in_english
     subcategory.subcategory_in_bangla = subcategory_data.subcategory_in_bangla
-    from datetime import datetime
-    subcategory.updated_at = datetime.utcnow()
+    subcategory.updated_at = datetime.now(timezone.utc)
     session.add(subcategory)
     await session.commit()
     await session.refresh(subcategory)

@@ -31,7 +31,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ticket_classifier}
     ports:
-      - "800:8000"
+      - "8000:8000"
     volumes:
       - media_data:/app/media
     networks:

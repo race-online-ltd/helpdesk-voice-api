@@ -22,9 +22,6 @@ services:
 
   # Backend API service — published on a dedicated host port
   backend:
-    # Pull the pre-built image from Docker Hub.
-    # Override DOCKER_IMAGE to deploy a specific tag (e.g., sha-abc1234).
-    image: ${DOCKER_IMAGE:-${DOCKERHUB_USERNAME:-myorg}/auto-ticket-classifier:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -34,9 +31,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ticket_classifier}
     ports:
-      # Exposed on a dedicated port so it doesn't clash with the asr-middleware
-      # stack already running on this VM. Change BACKEND_PORT in .env as needed.
-      - "${BACKEND_PORT:-8001}:8000"
+      - "800:8000"
     volumes:
       - media_data:/app/media
     networks:

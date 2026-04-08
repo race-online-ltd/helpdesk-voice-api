@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import tempfile
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -11,6 +12,9 @@ from typing import Annotated
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+from pedalboard.io import AudioFile
+from pedalboard import Pedalboard, NoiseGate, Compressor, LowShelfFilter, Gain
+import noisereduce as nr
 
 from app.api.v1.deps import get_current_active_user
 
@@ -57,15 +61,60 @@ async def create_ticket(
             detail="Empty audio file provided.",
         )
 
-    mime_type = file.content_type or "audio/mpeg"
+    # Process the audio: noise reduction, normalization, and compression
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_in, tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
+        temp_in.write(audio_bytes)
+        temp_in.flush()
+        temp_in_name = temp_in.name
+        temp_out_name = temp_out.name
+
+    try:
+        with AudioFile(temp_in_name) as f_in:
+            sr = f_in.samplerate
+            audio = f_in.read(f_in.frames)
+
+        reduced_noise = nr.reduce_noise(y=audio, sr=sr, stationary=True, prop_decrease=1.0)
+
+        board = Pedalboard([
+            NoiseGate(threshold_db=-30.0, ratio=1.5, release_ms=250.0),
+            Compressor(threshold_db=-16.0, ratio=2.5),
+            LowShelfFilter(cutoff_frequency_hz=400.0, gain_db=10.0, q=1.0),
+            Gain(gain_db=10.0)
+        ])
+
+        effected = board(reduced_noise, sample_rate=sr)
+        num_channels = effected.shape[0] if effected.ndim > 1 else 1
+
+        with AudioFile(temp_out_name, "w", samplerate=sr, num_channels=num_channels) as f_out:
+            f_out.write(effected)
+
+        with open(temp_out_name, "rb") as f_processed:
+            processed_audio_bytes = f_processed.read()
+            
+    except Exception as e:
+        if os.path.exists(temp_in_name):
+            os.remove(temp_in_name)
+        if os.path.exists(temp_out_name):
+            os.remove(temp_out_name)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Audio processing failed: {str(e)}",
+        )
+
+    if os.path.exists(temp_in_name):
+        os.remove(temp_in_name)
+    if os.path.exists(temp_out_name):
+        os.remove(temp_out_name)
+
+    mime_type = "audio/wav"
 
     # Upload audio to the Gemini Files API
     try:
         uploaded_file = client.files.upload(
-            file=io.BytesIO(audio_bytes),
+            file=io.BytesIO(processed_audio_bytes),
             config=types.UploadFileConfig(
                 mime_type=mime_type,
-                display_name=file.filename or "complaint_audio",
+                display_name=(file.filename or "complaint_audio") + "_denoised.wav",
             ),
         )
     except Exception as e:

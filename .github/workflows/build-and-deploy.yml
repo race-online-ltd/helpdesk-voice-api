@@ -1,3 +1,21 @@
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  FILE PATH:  .github/workflows/ci-cd.yml                       │
+# │  Placed at:  .github/workflows/  (create folder if missing)    │
+# │                                                                 │
+# │  GitHub Secrets required (Settings → Secrets → Actions):       │
+# │    DOCKERHUB_USERNAME   your Docker Hub username                │
+# │    DOCKERHUB_TOKEN      Docker Hub access token                 │
+# │    VM_HOST              IP or hostname of your VM               │
+# │    VM_USER              SSH username (e.g. ubuntu)              │
+# │    VM_SSH_KEY           private key content (-----BEGIN...)     │
+# │    VM_PORT              SSH port (optional, default 22)         │
+# │    DB_USER              postgres username                       │
+# │    DB_PASSWORD          postgres password                       │
+# │    DB_NAME              postgres database name                  │
+# │    SECRET_KEY           app secret key                          │
+# │    OPENAI_API_KEY       (and any other app secrets)             │
+# └─────────────────────────────────────────────────────────────────┘
+
 name: CI/CD Pipeline
 
 on:
@@ -8,8 +26,13 @@ on:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/auto-ticket-classifier
+  APP_DIR: /opt/auto-ticket-classifier
 
 jobs:
+
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 1 — Build image and push to Docker Hub
+  # ──────────────────────────────────────────────────────────────────
   build-and-push:
     runs-on: ubuntu-latest
     steps:
@@ -26,37 +49,103 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract short SHA
-        id: vars
         run: echo "SHA_TAG=sha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          dockerfile: ./Dockerfile          # ./Dockerfile (project root)
           push: true
-          tags: ${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:${{ env.SHA_TAG }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ env.SHA_TAG }}
+          # Layer cache speeds up subsequent builds significantly
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to:   type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
+  # ──────────────────────────────────────────────────────────────────
+  # JOB 2 — Deploy to VM
+  #   1. SCP docker-compose.yml to VM
+  #   2. SSH: write .env from secrets
+  #   3. SSH: docker pull + docker compose up
+  #   4. SSH: wait for healthcheck + tail logs
+  #
+  #   Alembic migration runs automatically inside entrypoint.sh
+  #   which is baked into the Docker image.
+  # ──────────────────────────────────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Deploy to VM via SSH
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Copy docker-compose.yml from repo root to VM
+      # Path on VM: /opt/auto-ticket-classifier/docker-compose.yml
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key:      ${{ secrets.VM_SSH_KEY }}
+          port:     ${{ secrets.VM_PORT || 22 }}
+          source:   "docker-compose.yml"           # project root
+          target:   ${{ env.APP_DIR }}
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VM_HOST }}
+          host:     ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: ${{ secrets.VM_PORT || 22 }}
+          key:      ${{ secrets.VM_SSH_KEY }}
+          port:     ${{ secrets.VM_PORT || 22 }}
+          envs: IMAGE_NAME,APP_DIR
           script: |
-            docker pull ${{ env.IMAGE_NAME }}:latest &&
-            docker stop auto-ticket || true &&
-            docker rm auto-ticket || true &&
-            docker run -d \
-              --name auto-ticket \
-              -p 8383:8000 \
-              --restart always \
-              ${{ env.IMAGE_NAME }}:latest
+            set -e
+            cd "$APP_DIR"
+
+            # ── 1. Write .env from GitHub Secrets ───────────────────
+            # heredoc keeps secrets off the process list and out of
+            # shell history. File is chmod 600 (owner-read only).
+            cat > .env << 'ENVEOF'
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            ENVEOF
+            chmod 600 .env
+
+            # ── 2. Pull the freshly built image ─────────────────────
+            docker pull "$IMAGE_NAME:latest"
+
+            # ── 3. Bring up the stack with compose ──────────────────
+            # --pull never  → use the image we just pulled above
+            # --remove-orphans → clean up renamed containers
+            # The postgres_data volume is NEVER removed here.
+            # Only "docker compose down -v" would do that.
+            IMAGE_NAME="$IMAGE_NAME" docker compose up -d \
+              --pull never \
+              --remove-orphans
+
+            # ── 4. Wait for backend healthcheck ─────────────────────
+            echo "==> Waiting for atc-backend to become healthy..."
+            for i in $(seq 1 30); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' atc-backend 2>/dev/null || echo "starting")
+              if [ "$STATUS" = "healthy" ]; then
+                echo "  Backend healthy after $((i * 5))s."
+                break
+              fi
+              echo "  [$i/30] $STATUS — waiting 5s..."
+              sleep 5
+            done
+
+            # ── 5. Show recent logs (includes migration output) ──────
+            echo "==> Last 60 lines of backend log:"
+            docker logs --tail 60 atc-backend

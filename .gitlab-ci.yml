@@ -1,17 +1,9 @@
-# GitLab CI/CD — builds and pushes the backend image to Docker Hub on every
-# push to `main`.  A specific SHA tag is also created so you can pin a
-# deployment to an exact commit.
-#
-# Required CI/CD variables (set in GitLab → Settings → CI/CD → Variables):
-#   DOCKERHUB_USERNAME  – your Docker Hub username
-#   DOCKERHUB_TOKEN     – a Docker Hub access token (read/write scope)
-
 stages:
   - build
+  - deploy
 
 variables:
   IMAGE_NAME: $DOCKERHUB_USERNAME/auto-ticket-classifier
-  # Use Docker-in-Docker with TLS disabled (works with the docker:dind service).
   DOCKER_TLS_CERTDIR: ""
 
 build-and-push:
@@ -20,16 +12,13 @@ build-and-push:
   services:
     - docker:27-dind
   rules:
-    # Run on push / merge to main only.
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-    # Allow manual trigger from any branch for ad-hoc testing.
     - when: manual
       allow_failure: true
   before_script:
     - docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
   script:
-    # Short SHA tag (matches the GitHub Actions sha- prefix convention).
     - SHA_TAG="sha-$(echo $CI_COMMIT_SHORT_SHA)"
     - |
       docker build \
@@ -38,10 +27,34 @@ build-and-push:
         -t "$IMAGE_NAME:latest" \
         -t "$IMAGE_NAME:$SHA_TAG" \
         .
-    # Push both tags.
     - docker push "$IMAGE_NAME:latest"
     - docker push "$IMAGE_NAME:$SHA_TAG"
-    # Print the exact image reference so it can be copy-pasted for the VM.
     - echo "Pushed $IMAGE_NAME:latest and $IMAGE_NAME:$SHA_TAG"
   after_script:
     - docker logout
+
+deploy:
+  stage: deploy
+  image: alpine:latest
+  needs:
+    - build-and-push
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - echo "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -p ${VM_PORT:-22} $VM_HOST >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh -p ${VM_PORT:-22} $VM_USER@$VM_HOST "
+        docker pull $IMAGE_NAME:latest &&
+        docker stop auto-ticket || true &&
+        docker rm auto-ticket || true &&
+        docker run -d \
+          --name auto-ticket \
+          -p 8383:8000 \
+          --restart always \
+          $IMAGE_NAME:latest
+      "

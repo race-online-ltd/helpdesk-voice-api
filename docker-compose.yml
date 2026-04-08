@@ -3,7 +3,6 @@
 # │  Placed at:  project root                                       │
 # │  On the VM:  /opt/helpdesk-voice-api/docker-compose.yml     │
 # └─────────────────────────────────────────────────────────────────┘
-version: '3.8'
 
 services:
 

@@ -1,7 +1,13 @@
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  FILE PATH:  ./docker-compose.yml                               │
+# │  Placed at:  project root                                       │
+# │  On the VM:  /opt/auto-ticket-classifier/docker-compose.yml     │
+# └─────────────────────────────────────────────────────────────────┘
 version: '3.8'
 
 services:
-  # Database service (internal only — not exposed to the host)
+
+  # ── Postgres ────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: atc-db
@@ -10,28 +16,33 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
       - POSTGRES_DB=${DB_NAME:-ticket_classifier}
     volumes:
+      # Named volume — survives container stop/rm/re-pull
+      # Only "docker compose down -v" would delete this
       - postgres_data:/var/lib/postgresql/data
     networks:
       - atc-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ticket_classifier}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
-  # Backend API service — published on a dedicated host port
+  # ── FastAPI backend ──────────────────────────────────────────────
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # IMAGE_NAME is exported in the CI deploy step before compose up
+    image: ${IMAGE_NAME:-auto-ticket-classifier}:latest
     container_name: atc-backend
     env_file:
+      # Written to /opt/auto-ticket-classifier/.env by CI pipeline
       - .env
     environment:
+      # Overrides any DATABASE_URL in .env so it always hits the
+      # compose db service by hostname, not localhost
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ticket_classifier}
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     volumes:
       - media_data:/app/media
     networks:
@@ -41,19 +52,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s   # give entrypoint time to migrate
 
 volumes:
   postgres_data:
-    driver: local
+    driver: local    # data lives in /var/lib/docker/volumes/atc_postgres_data
   media_data:
     driver: local
 
 networks:
-  # Isolated bridge network — no overlap with the asr-middleware stack.
   atc-network:
     driver: bridge

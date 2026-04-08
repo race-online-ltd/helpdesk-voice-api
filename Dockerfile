@@ -1,65 +1,37 @@
-# Build stage
-FROM python:3.13-slim as builder
-
-# Set working directory
-WORKDIR /app
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy dependency files
-COPY pyproject.toml ./
-
-# Install Python dependencies globally
-RUN pip install --no-cache-dir -e .
-
-# Runtime stage
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  FILE PATH:  ./Dockerfile                                       │
+# │  Placed at:  project root                                       │
+# └─────────────────────────────────────────────────────────────────┘
 FROM python:3.13-slim
 
-# Set working directory
 WORKDIR /app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# System deps: asyncpg needs libpq, uv build needs gcc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r appuser && useradd -r -g appuser appuser
+# Install uv (fast package manager used by this project)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy Python dependencies from builder (system-wide installation)
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /app /app
+# Layer cache: copy lock files first
+COPY pyproject.toml uv.lock ./
 
-# Copy application code
-COPY app ./app
-COPY alembic.ini ./
+# Install all dependencies into the venv
+RUN uv sync --frozen --no-dev
 
-# Create media directory for file storage and fix permissions
-RUN mkdir -p /app/media && \
-    chown -R appuser:appuser /app
+# Copy the entire project (app/, alembic.ini, alembic/, scripts/)
+COPY . .
 
-# Switch to non-root user
-USER appuser
+# Copy and permission the entrypoint (must come AFTER "COPY . .")
+# so it overwrites any stale version from the repo if needed
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Expose port
+# Put venv on PATH so alembic, uvicorn etc. are found by entrypoint
+ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()" || exit 1
-
-# Run the application with uvicorn (production mode - no reload)
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# entrypoint: wait → migrate → serve
+ENTRYPOINT ["/entrypoint.sh"]

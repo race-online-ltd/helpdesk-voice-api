@@ -15,4 +15,5 @@ dependencies = [
     "pyjwt>=2.11.0",
     "pytest>=9.0.2",
     "sqlmodel>=0.0.37",
+    "numpy>=1.26.4,<2.0",
 ]

@@ -13,7 +13,7 @@
 # │    DB_PASSWORD          postgres password                       │
 # │    DB_NAME              postgres database name                  │
 # │    SECRET_KEY           app secret key                          │
-# │    OPENAI_API_KEY       (and any other app secrets)             │
+# │    GEMINI_API_KEY       (and any other app secrets)             │
 # └─────────────────────────────────────────────────────────────────┘
 
 name: CI/CD Pipeline
@@ -118,7 +118,10 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_NAME=${{ secrets.DB_NAME }}
             SECRET_KEY=${{ secrets.SECRET_KEY }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            APP_PORT=${{ secrets.APP_PORT }}
+            REFRESH_TOKEN_EXPIRE_DAYS=${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
+            ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
             ENVEOF
             chmod 600 .env
 

@@ -41,7 +41,7 @@ services:
       # compose db service by hostname, not localhost
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ticket_classifier}
     ports:
-      - "${APP_PORT:-8383}:8000"
+      - "${APP_PORT:-8342}:8342"
     volumes:
       - media_data:/app/media
     networks:
@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:8342/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 3

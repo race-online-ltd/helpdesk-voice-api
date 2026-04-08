@@ -31,7 +31,7 @@ RUN chmod +x /entrypoint.sh
 # Put venv on PATH so alembic, uvicorn etc. are found by entrypoint
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 8000
+EXPOSE 8342
 
 # entrypoint: wait → migrate → serve
 ENTRYPOINT ["/entrypoint.sh"]

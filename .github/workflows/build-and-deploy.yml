@@ -126,7 +126,7 @@ jobs:
             docker pull "$IMAGE_NAME:latest"
 
             # ── 3. Bring up the stack with compose ──────────────────
-            # --pull never  → use the image we just pulled above
+            # --pull missing  → pull only if not present
             # --remove-orphans → clean up renamed containers
             # The postgres_data volume is NEVER removed here.
             # Only "docker compose down -v" would do that.

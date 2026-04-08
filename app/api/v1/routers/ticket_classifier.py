@@ -2,6 +2,8 @@ import os
 import io
 import json
 import tempfile
+import platform
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,9 +14,6 @@ from typing import Annotated
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from pedalboard.io import AudioFile
-from pedalboard import Pedalboard, NoiseGate, Compressor, LowShelfFilter, Gain
-import noisereduce as nr
 
 from app.api.v1.deps import get_current_active_user
 
@@ -31,6 +30,109 @@ class TicketClassification(BaseModel):
     subcategory: str
     priority: str
     description: str
+
+
+def _read_linux_cpu_flags() -> set[str]:
+    if platform.system().lower() != "linux":
+        return set()
+    try:
+        cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return set()
+
+    flags: set[str] = set()
+    for line in cpuinfo.splitlines():
+        if line.startswith("flags") or line.startswith("Features"):
+            parts = line.split(":", 1)
+            if len(parts) == 2:
+                flags.update(parts[1].strip().split())
+    return flags
+
+
+def _can_use_pedalboard_safely() -> bool:
+    """Best-effort guard to avoid SIGILL on older CPUs.
+
+    Some native wheels may require newer x86_64 instruction sets. We gate usage
+    behind CPU flags so the API can still start even on older hosts.
+    """
+
+    machine = platform.machine().lower()
+    if machine not in {"x86_64", "amd64"}:
+        return True
+
+    flags = _read_linux_cpu_flags()
+    if not flags:
+        return True
+
+    # Conservative: require AVX2 for pedalboard usage.
+    return "avx" in flags and "avx2" in flags
+
+
+def _audio_preprocessing_enabled() -> bool:
+    value = os.getenv("ATC_AUDIO_PREPROCESSING", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _process_audio_if_enabled(audio_bytes: bytes) -> bytes:
+    if not _audio_preprocessing_enabled():
+        return audio_bytes
+
+    if not _can_use_pedalboard_safely():
+        return audio_bytes
+
+    # Lazy-import native deps so app startup doesn't crash.
+    from pedalboard.io import AudioFile  # type: ignore
+    from pedalboard import (  # type: ignore
+        Pedalboard,
+        NoiseGate,
+        Compressor,
+        LowShelfFilter,
+        Gain,
+    )
+    import noisereduce as nr  # type: ignore
+
+    temp_in_name = ""
+    temp_out_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_in:
+            temp_in.write(audio_bytes)
+            temp_in.flush()
+            temp_in_name = temp_in.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
+            temp_out_name = temp_out.name
+
+        with AudioFile(temp_in_name) as f_in:
+            sr = f_in.samplerate
+            audio = f_in.read(f_in.frames)
+
+        reduced_noise = nr.reduce_noise(
+            y=audio,
+            sr=sr,
+            stationary=True,
+            prop_decrease=1.0,
+        )
+
+        board = Pedalboard(
+            [
+                NoiseGate(threshold_db=-30.0, ratio=1.5, release_ms=250.0),
+                Compressor(threshold_db=-16.0, ratio=2.5),
+                LowShelfFilter(cutoff_frequency_hz=400.0, gain_db=10.0, q=1.0),
+                Gain(gain_db=10.0),
+            ]
+        )
+
+        effected = board(reduced_noise, sample_rate=sr)
+        num_channels = effected.shape[0] if getattr(effected, "ndim", 1) > 1 else 1
+
+        with AudioFile(temp_out_name, "w", samplerate=sr, num_channels=num_channels) as f_out:
+            f_out.write(effected)
+
+        return Path(temp_out_name).read_bytes()
+    finally:
+        if temp_in_name and os.path.exists(temp_in_name):
+            os.remove(temp_in_name)
+        if temp_out_name and os.path.exists(temp_out_name):
+            os.remove(temp_out_name)
 
 
 @router.get("/", response_model=list[TicketPublic], status_code=status.HTTP_200_OK)
@@ -61,50 +163,16 @@ async def create_ticket(
             detail="Empty audio file provided.",
         )
 
-    # Process the audio: noise reduction, normalization, and compression
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_in, tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
-        temp_in.write(audio_bytes)
-        temp_in.flush()
-        temp_in_name = temp_in.name
-        temp_out_name = temp_out.name
-
+    # Process the audio (optional): noise reduction, normalization, and compression.
+    # This is intentionally lazy-imported to avoid crashing the server on hosts
+    # where native wheels can't run.
     try:
-        with AudioFile(temp_in_name) as f_in:
-            sr = f_in.samplerate
-            audio = f_in.read(f_in.frames)
-
-        reduced_noise = nr.reduce_noise(y=audio, sr=sr, stationary=True, prop_decrease=1.0)
-
-        board = Pedalboard([
-            NoiseGate(threshold_db=-30.0, ratio=1.5, release_ms=250.0),
-            Compressor(threshold_db=-16.0, ratio=2.5),
-            LowShelfFilter(cutoff_frequency_hz=400.0, gain_db=10.0, q=1.0),
-            Gain(gain_db=10.0)
-        ])
-
-        effected = board(reduced_noise, sample_rate=sr)
-        num_channels = effected.shape[0] if effected.ndim > 1 else 1
-
-        with AudioFile(temp_out_name, "w", samplerate=sr, num_channels=num_channels) as f_out:
-            f_out.write(effected)
-
-        with open(temp_out_name, "rb") as f_processed:
-            processed_audio_bytes = f_processed.read()
-            
+        processed_audio_bytes = _process_audio_if_enabled(audio_bytes)
     except Exception as e:
-        if os.path.exists(temp_in_name):
-            os.remove(temp_in_name)
-        if os.path.exists(temp_out_name):
-            os.remove(temp_out_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Audio processing failed: {str(e)}",
         )
-
-    if os.path.exists(temp_in_name):
-        os.remove(temp_in_name)
-    if os.path.exists(temp_out_name):
-        os.remove(temp_out_name)
 
     mime_type = "audio/wav"
 

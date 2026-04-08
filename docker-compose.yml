@@ -1,7 +1,7 @@
 # ┌─────────────────────────────────────────────────────────────────┐
 # │  FILE PATH:  ./docker-compose.yml                               │
 # │  Placed at:  project root                                       │
-# │  On the VM:  /opt/auto-ticket-classifier/docker-compose.yml     │
+# │  On the VM:  /opt/helpdesk-voice-api/docker-compose.yml     │
 # └─────────────────────────────────────────────────────────────────┘
 version: '3.8'
 
@@ -32,10 +32,10 @@ services:
   # ── FastAPI backend ──────────────────────────────────────────────
   backend:
     # IMAGE_NAME is exported in the CI deploy step before compose up
-    image: ${IMAGE_NAME:-auto-ticket-classifier}:latest
+    image: ${IMAGE_NAME:-helpdesk-voice-api}:latest
     container_name: atc-backend
     env_file:
-      # Written to /opt/auto-ticket-classifier/.env by CI pipeline
+      # Written to /opt/helpdesk-voice-api/.env by CI pipeline
       - .env
     environment:
       # Overrides any DATABASE_URL in .env so it always hits the

@@ -25,8 +25,8 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/auto-ticket-classifier
-  APP_DIR: /opt/auto-ticket-classifier
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/helpdesk-voice-api
+  APP_DIR: /opt/helpdesk-voice-api
 
 jobs:
 
@@ -87,7 +87,7 @@ jobs:
         uses: actions/checkout@v4
 
       # Copy docker-compose.yml from repo root to VM
-      # Path on VM: /opt/auto-ticket-classifier/docker-compose.yml
+      # Path on VM: /opt/helpdesk-voice-api/docker-compose.yml
       - name: Copy docker-compose.yml to VM
         uses: appleboy/scp-action@v0.1.7
         with:

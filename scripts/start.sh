@@ -13,7 +13,7 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-export IMAGE_NAME="auto-ticket-classifier"
+export IMAGE_NAME="helpdesk-voice-api"
 
 docker compose up --build -d
 echo "Stack is up. Tailing backend logs (Ctrl-C to stop):"

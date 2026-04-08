@@ -3,7 +3,7 @@ stages:
   - deploy
 
 variables:
-  IMAGE_NAME: $DOCKERHUB_USERNAME/auto-ticket-classifier
+  IMAGE_NAME: $DOCKERHUB_USERNAME/helpdesk-voice-api
   DOCKER_TLS_CERTDIR: ""
 
 build-and-push:

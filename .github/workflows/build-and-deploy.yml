@@ -149,6 +149,13 @@ jobs:
               sleep 5
             done
 
+            if [ "$STATUS" != "healthy" ]; then
+              echo "==> ERROR: atc-backend failed to become healthy!"
+              echo "==> Last 60 lines of backend log:"
+              docker logs --tail 60 atc-backend
+              exit 1
+            fi
+
             # ── 5. Show recent logs (includes migration output) ──────
             echo "==> Last 60 lines of backend log:"
             docker logs --tail 60 atc-backend

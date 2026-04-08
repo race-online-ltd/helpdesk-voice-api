@@ -7,6 +7,8 @@
 set -e
 
 echo "==> Waiting for database to be ready..."
+max_retries=30
+count=0
 until python -c "
 import asyncio, asyncpg, os, sys
 async def check():
@@ -19,7 +21,12 @@ async def check():
         sys.exit(1)
 asyncio.run(check())
 " 2>/dev/null; do
-  echo "  ...retrying in 2s"
+  count=$((count+1))
+  if [ $count -ge $max_retries ]; then
+    echo "  DB wait timed out after $max_retries retries."
+    exit 1
+  fi
+  echo "  ...retrying in 2s ($count/$max_retries)"
   sleep 2
 done
 echo "  DB is up."

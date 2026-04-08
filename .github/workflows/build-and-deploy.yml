@@ -131,7 +131,7 @@ jobs:
             # The postgres_data volume is NEVER removed here.
             # Only "docker compose down -v" would do that.
             IMAGE_NAME="$IMAGE_NAME" docker compose up -d \
-              --pull never \
+              --pull missing \
               --remove-orphans
 
             # ── 4. Wait for backend healthcheck ─────────────────────

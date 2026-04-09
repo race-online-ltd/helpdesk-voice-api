@@ -127,6 +127,6 @@ class SubCategoryTeam(SQLModel, table=True):
         default=None,
         sa_column=Column(Integer, ForeignKey("subcategory.id", ondelete="CASCADE"), index=True, nullable=False)
     )
-    team_id: int = Field(default=None, nullable=True)
+    company_id: int = Field(default=None, nullable=True)
     created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

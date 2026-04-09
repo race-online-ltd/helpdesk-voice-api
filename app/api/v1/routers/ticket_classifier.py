@@ -146,7 +146,7 @@ async def get_tickets(
     return tickets
 
 
-@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
 async def create_ticket(
     current_user: Annotated[User, Depends(get_current_active_user)],
     file: Annotated[UploadFile, File(description="Audio recording of the employee complaint")],

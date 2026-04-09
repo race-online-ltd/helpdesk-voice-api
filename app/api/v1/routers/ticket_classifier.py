@@ -243,6 +243,7 @@ Your tasks:
 2. Classify it into the most appropriate category, subcategory, and responsible team from the taxonomy below.
 3. Determine priority based on urgency and business impact.
 4. Write a concise English summary of the complaint.
+5. Incase of empty or unintelligible audio, don't create ticket rather return a JSON with all fields set to null and priority as "Low" (Very important).
 
 Available taxonomy:
 {taxonomy_for_prompt}

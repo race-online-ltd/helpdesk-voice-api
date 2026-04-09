@@ -5,11 +5,11 @@ from app.api.v1.routers import auth, ticket_classifier, categories, subcategorie
 app = FastAPI()
 
 
-app.include_router(auth.router)
-app.include_router(ticket_classifier.router)
-app.include_router(categories.router)
-app.include_router(subcategories.router)
-app.include_router(utils.router)
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(ticket_classifier.router, prefix="/api/v1")
+app.include_router(categories.router, prefix="/api/v1")
+app.include_router(subcategories.router, prefix="/api/v1")
+app.include_router(utils.router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():

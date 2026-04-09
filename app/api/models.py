@@ -58,7 +58,10 @@ class TokenBlacklist(SQLModel, table=True):
 
 class TicketBase(SQLModel):
     category: str = Field(default=None, max_length=100)
+    category_id: Optional[int] = Field(default=None, index=True)
     subcategory: str = Field(default=None, max_length=100)
+    subcategory_id: Optional[int] = Field(default=None, index=True)
+    company_id: Optional[int] = Field(default=None, index=True)
     priority: str = Field(default="Low", max_length=50)
     status: str = Field(default="Open", max_length=50)
     ref_ticket_id: Optional[uuid.UUID] = Field(default=None, index=True)

@@ -27,7 +27,9 @@ router = APIRouter(
 
 class TicketClassification(BaseModel):
     category: str
+    category_id: int
     subcategory: str
+    subcategory_id: int
     priority: str
     description: str
 
@@ -195,7 +197,12 @@ async def create_ticket(
     # Extract category and subcategory information for the classification prompt
     # Filter taxonomy by company and client visibility.
     category_with_sub = await session.exec(
-        select(Category.category_in_english, SubCategory.subcategory_in_english)
+        select(
+            Category.id,
+            Category.category_in_english,
+            SubCategory.id,
+            SubCategory.subcategory_in_english,
+        )
         .join(SubCategoryTeam, SubCategoryTeam.category_id == Category.id)
         .join(SubCategory, SubCategoryTeam.sub_category_id == SubCategory.id)
         .where(
@@ -207,13 +214,24 @@ async def create_ticket(
     )
     rows = category_with_sub.all()
 
-    grouped: dict[str, list[str]] = {}
-    for category_name, subcategory_name in rows:
-        grouped.setdefault(category_name, [])
-        if subcategory_name not in grouped[category_name]:
-            grouped[category_name].append(subcategory_name)
+    taxonomy_by_category_id: dict[int, dict] = {}
+    for category_id_db, category_name, subcategory_id_db, subcategory_name in rows:
+        if category_id_db is None or subcategory_id_db is None:
+            continue
 
-    grouped_for_prompt = json.dumps(grouped, ensure_ascii=False, sort_keys=True, indent=2)
+        entry = taxonomy_by_category_id.setdefault(
+            int(category_id_db),
+            {"category": category_name, "category_id": int(category_id_db), "subcategories": []},
+        )
+        sub_list: list[dict] = entry["subcategories"]
+        if not any(s["subcategory_id"] == int(subcategory_id_db) for s in sub_list):
+            sub_list.append({"subcategory": subcategory_name, "subcategory_id": int(subcategory_id_db)})
+
+    taxonomy_for_prompt = json.dumps(
+        list(taxonomy_by_category_id.values()),
+        ensure_ascii=False,
+        indent=2,
+    )
 
     
     classification_prompt = f"""You are an intelligent helpdesk ticket classifier for an organization.
@@ -227,7 +245,7 @@ Your tasks:
 4. Write a concise English summary of the complaint.
 
 Available taxonomy:
-{grouped_for_prompt}
+{taxonomy_for_prompt}
 
 Priority guidelines:
 - Low: General inquiry or non-urgent minor issue.
@@ -238,7 +256,9 @@ Priority guidelines:
 Respond ONLY with a valid JSON object using exactly these fields:
 {{
   "category": "<one of the categories above>",
+  "category_id": "<the corresponding category ID from the database>",
   "subcategory": "<one of the subcategories for that category>",
+  "subcategory_id": "<the corresponding subcategory ID from the database>",
   "priority": "<Low | Medium | High | Critical>",
   "description": "<2-3 sentence summary of the complaint in English>"
 }}"""
@@ -270,9 +290,28 @@ Respond ONLY with a valid JSON object using exactly these fields:
         except Exception:
             pass
 
+    if classification.category_id not in taxonomy_by_category_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="AI returned an invalid category_id for the selected company taxonomy.",
+        )
+
+    allowed_sub_ids = {
+        s["subcategory_id"]
+        for s in taxonomy_by_category_id[classification.category_id]["subcategories"]
+    }
+    if classification.subcategory_id not in allowed_sub_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="AI returned an invalid subcategory_id for the selected category/company taxonomy.",
+        )
+
     ticket = Ticket(
+        company_id=company_id,
         category=classification.category,
+        category_id=classification.category_id,
         subcategory=classification.subcategory,
+        subcategory_id=classification.subcategory_id,
         priority=classification.priority,
         description=classification.description,
         status="Open",

@@ -1,9 +1,3 @@
-# ┌─────────────────────────────────────────────────────────────────┐
-# │  FILE PATH:  ./docker-compose.yml                               │
-# │  Placed at:  project root                                       │
-# │  On the VM:  /opt/helpdesk-voice-api/docker-compose.yml     │
-# └─────────────────────────────────────────────────────────────────┘
-
 services:
 
   # ── Postgres ────────────────────────────────────────────────────
@@ -15,11 +9,9 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
       - POSTGRES_DB=${DB_NAME:-ticket_classifier}
     volumes:
-      # Named volume — survives container stop/rm/re-pull
-      # Only "docker compose down -v" would delete this
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - atc-network
+      - helpdesk
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ticket_classifier}"]
@@ -30,22 +22,18 @@ services:
 
   # ── FastAPI backend ──────────────────────────────────────────────
   backend:
-    # IMAGE_NAME is exported in the CI deploy step before compose up
     image: ${IMAGE_NAME:-helpdesk-voice-api}:latest
     container_name: atc-backend
     env_file:
-      # Written to /opt/helpdesk-voice-api/.env by CI pipeline
       - .env
     environment:
-      # Overrides any DATABASE_URL in .env so it always hits the
-      # compose db service by hostname, not localhost
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-ticket_classifier}
     ports:
       - "${APP_PORT:-8342}:8342"
     volumes:
       - media_data:/app/media
     networks:
-      - atc-network
+      - helpdesk
     depends_on:
       db:
         condition: service_healthy
@@ -56,14 +44,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s   # give entrypoint time to migrate
+      start_period: 60s
 
 volumes:
   postgres_data:
-    driver: local    # data lives in /var/lib/docker/volumes/atc_postgres_data
+    driver: local
   media_data:
     driver: local
 
 networks:
-  atc-network:
-    driver: bridge
+  helpdesk:
+    external: true

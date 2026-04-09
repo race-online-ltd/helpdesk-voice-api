@@ -146,11 +146,12 @@ async def get_tickets(
     return tickets
 
 
-@router.post("/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_ticket(
     current_user: Annotated[User, Depends(get_current_active_user)],
     file: Annotated[UploadFile, File(description="Audio recording of the employee complaint")],
     session: Annotated[AsyncSession, Depends(get_session)],
+    company_id: int
 ):
     """
     Accept an audio complaint, transcribe and classify it using Gemini AI,
@@ -192,11 +193,17 @@ async def create_ticket(
         )
     
     # Extract category and subcategory information for the classification prompt
+    # Filter taxonomy by company and client visibility.
     category_with_sub = await session.exec(
         select(Category.category_in_english, SubCategory.subcategory_in_english)
         .join(SubCategoryTeam, SubCategoryTeam.category_id == Category.id)
         .join(SubCategory, SubCategoryTeam.sub_category_id == SubCategory.id)
+        .where(
+            SubCategoryTeam.company_id == company_id,
+            SubCategoryTeam.is_client_visible == 1,
+        )
         .distinct()
+        .order_by(Category.category_in_english, SubCategory.subcategory_in_english)
     )
     rows = category_with_sub.all()
 
@@ -206,6 +213,9 @@ async def create_ticket(
         if subcategory_name not in grouped[category_name]:
             grouped[category_name].append(subcategory_name)
 
+    grouped_for_prompt = json.dumps(grouped, ensure_ascii=False, sort_keys=True, indent=2)
+
+    
     classification_prompt = f"""You are an intelligent helpdesk ticket classifier for an organization.
 
 Listen to the audio complaint carefully. The audio may be in English, Bangla, or a mix (Banglish).
@@ -217,7 +227,7 @@ Your tasks:
 4. Write a concise English summary of the complaint.
 
 Available taxonomy:
-{grouped}
+{grouped_for_prompt}
 
 Priority guidelines:
 - Low: General inquiry or non-urgent minor issue.

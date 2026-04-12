@@ -1,21 +1,3 @@
-# ┌─────────────────────────────────────────────────────────────────┐
-# │  FILE PATH:  .github/workflows/ci-cd.yml                       │
-# │  Placed at:  .github/workflows/  (create folder if missing)    │
-# │                                                                 │
-# │  GitHub Secrets required (Settings → Secrets → Actions):       │
-# │    DOCKERHUB_USERNAME   your Docker Hub username                │
-# │    DOCKERHUB_TOKEN      Docker Hub access token                 │
-# │    VM_HOST              IP or hostname of your VM               │
-# │    VM_USER              SSH username (e.g. ubuntu)              │
-# │    VM_SSH_KEY           private key content (-----BEGIN...)     │
-# │    VM_PORT              SSH port (optional, default 22)         │
-# │    DB_USER              postgres username                       │
-# │    DB_PASSWORD          postgres password                       │
-# │    DB_NAME              postgres database name                  │
-# │    SECRET_KEY           app secret key                          │
-# │    GEMINI_API_KEY       (and any other app secrets)             │
-# └─────────────────────────────────────────────────────────────────┘
-
 name: CI/CD Pipeline
 
 on:
@@ -27,6 +9,8 @@ on:
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/helpdesk-voice-api
   APP_DIR: /opt/helpdesk-voice-api
+  APP_ENV: ${{ secrets.APP_ENV }}
+  APP_PORT: ${{ secrets.APP_PORT }}
 
 jobs:
 
@@ -121,6 +105,7 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             APP_PORT=${{ secrets.APP_PORT }}
             ALGORITHM=${{ secrets.ALGORITHM }}
+            APP_ENV=${{ secrets.APP_ENV }}
             REFRESH_TOKEN_EXPIRE_DAYS=${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
             ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
             ENVEOF
